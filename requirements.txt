@@ -1,0 +1,2 @@
+numpy
+qi  # falls lokal getestet wird
