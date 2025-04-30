@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # === Konfiguration ===
-NAO_IP="169.254.14.127"
+NAO_IP="169.254.119.143"
 NAO_USER="nao"
 LOCAL_SCRIPT_PATH="scripts/hello.py"
 REMOTE_SCRIPT_NAME=$(basename "$LOCAL_SCRIPT_PATH")
