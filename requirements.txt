@@ -1,2 +1,3 @@
 numpy
-qi  # falls lokal getestet wird
+python_dotenv
+qi

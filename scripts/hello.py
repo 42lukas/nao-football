@@ -1,8 +1,13 @@
 import qi
+import dotenv as env 
+import os
+
+env.load_dotenv()
+IP_ADDRESS = os.getenv("IP_ADDRESS")
 
 def main():
     session = qi.Session()
-    session.connect("169.254.119.143")  # IP deines NAO
+    session.connect(f"tcp://{IP_ADDRESS}")  # IP deines NAO
     tts = session.service("ALTextToSpeech")
     tts.say("Hallo vom Team!") 
 

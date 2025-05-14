@@ -8,6 +8,7 @@ __pycache__/
 
 # VSCode
 .vscode/
+venv/
 
 # Mac
 .DS_Store
