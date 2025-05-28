@@ -2,7 +2,9 @@
 import time
 import wake_up
 
-def kick(session, leg="left"):
+FRAME_TORSO = 0
+
+def kick(session, leg):
     motion_service = session.service("ALMotion")
     posture_service = session.service("ALRobotPosture")
 
@@ -18,23 +20,31 @@ def kick(session, leg="left"):
     else:
         raise ValueError("Ungueltiges Bein. Verwende 'left' oder 'right'.")
 
-    # Gewicht auf Standbein
-    motion_service.setFootStepsWithSpeed([support_leg], [[0.0, 0.0, 0.0]], [0.3], False)
-    time.sleep(1.0)
-
-    # Kick-Pfad in 3 Schritten:
-    path = [
-        [0.00, 0.00, 0.5, 0.0, 0.0, 0.0],   # 1. anheben (5 cm nach oben)
-        [0.10, 0.00, 0.05, 0.5, 0.0, 0.0],   # 2. nach vorn schwingen (10 cm)
-        [0.00, 0.00, 0.00, 0.0, 0.0, 0.0]    # 3. zurück auf Boden
-    ]
-    times = [0.4, 0.8, 1.2]
-    axis_mask = 63  # alle DOFs
-    space = motion_service.SPACE_TORSO
-
-    motion_service.positionInterpolation(
-        effector, space, path, axis_mask, times, False
+    # Statt nur 5cm auf das Support-Leg -> mehr Abstand, um Gewichtsverlagerung zu erzwingen
+    motion_service.setFootStepsWithSpeed(
+        [support_leg],
+        [[0.0, 0.07, 0.0]],  # Seitlich mehr verlagern
+        [0.5],
+        False
     )
+    time.sleep(0.5)
+
+   
+
+    # Kickpfad relativ zur aktuellen Position
+    path = [
+        [0.0, 0.0, 0.02, 0.0, 0.0, 0.0],
+        [0.08, 0.0, 0.02, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    ]
+    times = [0.1, 0.4, 0.9]
+    axis_mask = 63  # alle DOFs
+
+    print("→ Kickbewegung startet...")
+    motion_service.positionInterpolation(
+        effector, FRAME_TORSO, path, axis_mask, times, False
+    )
+    print("→ Kick beendet.")
 
     time.sleep(0.5)
     posture_service.goToPosture("StandInit", 0.5)
