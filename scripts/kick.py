@@ -1,6 +1,5 @@
 # coding: utf-8
 import time
-import wake_up
 
 FRAME_TORSO = 0
 AXIS_MASK_ALL = 63
