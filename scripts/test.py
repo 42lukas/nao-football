@@ -2,19 +2,16 @@
 import qi
 import argparse
 import sys
-import cv2
 import dotenv as env
 import numpy as np
 import time
 
-env.load_dotenv()
-IP_ADDRESS = env.get_key("IP_ADDRESS")
 
 def main(robot_ip, robot_port):
     # 1. Session aufbauen
     session = qi.Session()
     try:
-        session.connect(f"{IP_ADDRESS}:{robot_port}")
+        session.connect("169.254.121.199:9559")
     except RuntimeError:
         print(f"Cannot connect to NAO at {robot_ip}:{robot_port}")
         sys.exit(1)
