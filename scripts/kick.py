@@ -1,6 +1,5 @@
 # coding: utf-8
 import time
-import wake_up
 
 FRAME_TORSO = 0
 AXIS_MASK_ALL = 63
@@ -8,8 +7,6 @@ AXIS_MASK_ALL = 63
 def kick(session, leg):
     motion_service = session.service("ALMotion")
     posture_service = session.service("ALRobotPosture")
-
-    wake_up.wake_up(session)
 
     # balance preparation
     effector_torso = "Torso"
