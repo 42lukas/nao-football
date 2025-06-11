@@ -1,25 +1,57 @@
+#!/usr/bin/env python3
 import qi
-import socket
-import struct
+import sys
+import cv2
+import dotenv as env
+import numpy as np
 import time
+import os
+
+env.load_dotenv()
+IP_ADDRESS = os.getenv("IP_ADDRESS")
+ROBOT_PORT = 9559  # Standardport
 
 def main():
+    # 1. Session aufbauen
     session = qi.Session()
-    session.connect("tcp://127.0.0.1:9559")  # oder interne IP
+    try:
+        session.connect(f"tcp://{IP_ADDRESS}:{ROBOT_PORT}")
+    except RuntimeError:
+        print(f"Cannot connect to NAO at {IP_ADDRESS}:{ROBOT_PORT}")
+        sys.exit(1)
 
-    video = session.service("ALVideoDevice")
-    name = video.subscribeCamera("pic", 0, 1, 11, 5)  # 320x240 RGB, 5 FPS
+    # 2. Video-Service holen
+    cam = session.service("ALVideoDevice")
 
-    s = socket.socket()
-    s.connect(("DEIN_PC_IP", 5000))  # ← IP deines Rechners angeben
+    # 3. Kamera abonnieren
+    resolution = 2      # VGA (640x480)
+    color_space = 11    # kBGRColorSpace
+    fps = 30
+    client_name = cam.subscribeCamera("camClient", 0, resolution, color_space, fps)
 
-    while True:
-        img = video.getImageRemote(name)
-        if img:
-            data = img[6]
-            size = len(data)
-            s.sendall(struct.pack("!I", size) + data)
-        time.sleep(0.2)
+    try:
+        print("Starte Kamera-Stream. Drücke ESC zum Beenden.")
+        while True:
+            frame = cam.getImageRemote(client_name)
+            if frame is None:
+                print("Kein Bild erhalten.")
+                break
+
+            width = frame[0]
+            height = frame[1]
+            array = frame[6]
+            img = np.frombuffer(array, dtype=np.uint8).reshape((height, width, 3))
+
+            cv2.imshow("NAO-Kamera", img)
+            key = cv2.waitKey(1) & 0xFF
+            if key == 27:  # ESC
+                break
+
+            time.sleep(0.01)
+
+    finally:
+        cam.unsubscribe(client_name)
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()

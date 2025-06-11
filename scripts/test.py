@@ -1,69 +1,31 @@
-#!/usr/bin/env python3
 import qi
-import argparse
-import sys
-import cv2
-import dotenv as env
-import numpy as np
+import socket
+import struct
 import time
+import os
+import dotenv as env
 
 env.load_dotenv()
-IP_ADDRESS = env.get_key("IP_ADDRESS")
+IP_ADDRESS = os.getenv("IP_ADDRESS")
+DEIN_PC_IP = os.getenv("DEIN_PC_IP")
 
-def main(robot_ip, robot_port):
-    # 1. Session aufbauen
+def main():
     session = qi.Session()
-    try:
-        session.connect(f"{IP_ADDRESS}:{robot_port}")
-    except RuntimeError:
-        print(f"Cannot connect to NAO at {robot_ip}:{robot_port}")
-        sys.exit(1)
+    session.connect(f"tcp://{IP_ADDRESS}")  # oder interne IP
 
-    # 2. Video-Service holen
-    cam = session.service("ALVideoDevice")
+    video = session.service("ALVideoDevice")
+    name = video.subscribeCamera("pic", 0, 1, 11, 5)  # 320x240 RGB, 5 FPS
 
-    # 3. Kamera abonnieren (0=Top-Cam, 1=Bottom-Cam; Resolution=2: 640x480; Color=11: BGR)
-    resolution = 2      # kQVGA (320x240)=1, VGA (640x480)=2, HD (1280x960)=3
-    color_space = 11    # kBGRColorSpace
-    fps = 15
-    client_name = cam.subscribeCamera("camClient", 0, resolution, color_space, fps)
+    s = socket.socket()
+    s.connect((DEIN_PC_IP, 5000))  # ← IP deines Rechners angeben
 
-    try:
-        print("Starte Kamera-Stream. Drücke ESC zum Beenden.")
-        while True:
-            # 4. Bild abrufen
-            frame = cam.getImageRemote(client_name)
-            if frame is None:
-                print("Kein Bild erhalten.")
-                break
-
-            # 5. Metadaten auspacken
-            width = frame[0]
-            height = frame[1]
-            array = frame[6]  # Bilddaten als flache Liste
-            # In NumPy-Array umwandeln und reshapen
-            img = np.frombuffer(array, dtype=np.uint8).reshape((height, width, 3))
-
-            # 6. Anzeige mit OpenCV
-            cv2.imshow("NAO-Kamera", img)
-            key = cv2.waitKey(1) & 0xFF
-            if key == 27:  # ESC
-                break
-
-            # kleine Pause, um CPU-Last zu senken
-            time.sleep(0.01)
-
-    finally:
-        # 7. Aufräumen
-        cam.unsubscribe(client_name)
-        cv2.destroyAllWindows()
+    while True:
+        img = video.getImageRemote(name)
+        if img:
+            data = img[6]
+            size = len(data)
+            s.sendall(struct.pack("!I", size) + data)
+        time.sleep(0.2)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Zeige den NAO-Kamera-Stream auf dem PC")
-    parser.add_argument("--ip", type=str, required=True,
-                        help="IP-Adresse des NAO (z. B. 169.254.119.143)")
-    parser.add_argument("--port", type=int, default=9559,
-                        help="Port des NAO (Standard 9559)")
-    args = parser.parse_args()
-    main(args.ip, args.port)
+    main()
