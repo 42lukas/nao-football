@@ -16,10 +16,10 @@ def kick(session, leg):
 
     if leg.lower() == "left":
         effector_leg = "LLeg"
-        target[1] -= 0.0058
+        target[1] -= 0.0054
     elif leg.lower() == "right":
         effector_leg = "RLeg"
-        target[1] += 0.0058
+        target[1] += 0.0054
     else:
         raise ValueError("Ungueltiges Bein. Verwende 'left' oder 'right'.")
 
@@ -34,7 +34,7 @@ def kick(session, leg):
 
     # kick
     path = [
-        [0.0, 0.0, 0.03, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         [0.05, 0.0, 0.03, 0.0, 0.0, 0.0],
         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     ]
