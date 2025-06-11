@@ -9,8 +9,6 @@ def kick(session, leg):
     motion_service = session.service("ALMotion")
     posture_service = session.service("ALRobotPosture")
 
-    wake_up.wake_up(session)
-
     # balance preparation
     effector_torso = "Torso"
     duration = 0.5
