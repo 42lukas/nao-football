@@ -1,17 +1,9 @@
-import qi
-import cv2
 import numpy as np
+import time
+import cv2
 from ultralytics import YOLO
 
-
-def main():
-    session = qi.Session()
-    try:
-        session.connect("tcp://192.168.200.59:9559")
-    except RuntimeError:
-        print("Verbindung zum NAO fehlgeschlagen.")
-        return
-
+def ball_tracker(session):
     # NAO-Services
     motion = session.service("ALMotion")
     posture = session.service("ALRobotPosture")
@@ -19,93 +11,74 @@ def main():
     tts = session.service("ALTextToSpeech")
 
     # Initialisierung
-    posture.goToPosture("StandInit", 0.5)
     motion.wakeUp()
-    tts.say("Starting Tracker")
+    posture.goToPosture("StandInit", 0.5)
+    tts.say("Start.")
 
-    # Kamera abonnieren: Bodenkamera, QVGA, RGB
-    name_id = video_service.subscribeCamera("nao_cam", 1, 1, 11, 10)
+    # Kamera abonnieren
+    resolution = 1  # VGA
+    color_space = 11  # RGB
+    fps = 15
+    cam_name = "BallTracker"
+    cam = video_service.subscribeCamera("camClient", 1, resolution, color_space, fps)
 
-    # YOLOv8 Modell laden
-    model = YOLO("./yolo_model/best.pt")  
-
-    head_yaw = 0.0
-    head_pitch = 0.0
-    frame_count = 0
-    last_results = None
+    # YOLOv5-Modell laden
+    model_path = "./yolo_model/best.pt"
+    model = YOLO(model_path)
 
     try:
         while True:
-            image = video_service.getImageRemote(name_id)
-            if image is None:
+            # Bild holen
+            image_data = video_service.getImageRemote(cam)
+            if image_data is None:
+                print("Kein Bild empfangen, warte kurz...")
+                time.sleep(0.1)
                 continue
+            
+            print("Bild empfangen")
 
-            width, height, array = image[0], image[1], image[6]
-            frame = np.frombuffer(array, dtype=np.uint8).reshape((height, width, 3))
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            width = image_data[0]
+            height = image_data[1]
+            array = image_data[6]
+            image = np.frombuffer(array, dtype=np.uint8).reshape((height, width, 3))
 
-            # YOLO-Inferenz nur alle 3 Frames
-            if frame_count % 5 == 0:
-                results = model.track(source=frame, persist=True, conf=0.5, verbose=False)
-                last_results = results
+            # YOLO-Inferenz
+            results = model(image)
+            cv2.imshow("NAO Kamera", image)
+            cv2.waitKey(1)
+            result = results[0]  # Nur ein Bild
+            boxes = result.boxes  # Boxes-Objekt
+
+            if boxes is not None and len(boxes) > 0:
+                # Nur den ersten Ball nehmen
+                box = boxes[0]
+                xyxy = box.xyxy[0].cpu().numpy()
+                x1, y1, x2, y2 = xyxy
+                center_x = int((x1 + x2) / 2)
+                center_y = int((y1 + y2) / 2)
+
+                # Bildmitte und Steuerung
+                img_center_x = image.shape[1] // 2
+                diff_x = center_x - img_center_x
+
+                if abs(diff_x) < 30:
+                    motion.move(0.1, 0, 0)  # Geradeaus
+                elif diff_x < 0:
+                    motion.move(0, 0, 0.2)  # Links drehen
+                else:
+                    motion.move(0, 0, -0.2)  # Rechts drehen
+
+                print(f"Ball gefunden bei x={center_x}, y={center_y}")
             else:
-                results = last_results
+                motion.move(0, 0, 0.3)
+                time.sleep(0.1)
 
-            # Kopf-Tracking
-            if results:
-                for result in results:
-                    for box in result.boxes:
-                        cls_id = int(box.cls[0])
-                        cls_name = model.names[cls_id]
+            time.sleep(0.1)
 
-                        if cls_name.lower() == "ball":
-                            x1, y1, x2, y2 = map(int, box.xyxy[0])
-                            cx = (x1 + x2) // 2
-                            cy = (y1 + y2) // 2
-
-                            center_x = width // 2
-                            center_y = height // 2
-                            dx = cx - center_x
-                            dy = cy - center_y
-
-                            sensitivity_x = 0.002
-                            sensitivity_y = 0.002
-
-                            head_yaw -= dx * sensitivity_x
-                            head_pitch += dy * sensitivity_y
-
-                            head_yaw = max(-1.5, min(1.5, head_yaw))
-                            head_pitch = max(-0.5, min(0.5, head_pitch))
-
-                            motion.setAngles(["HeadYaw", "HeadPitch"], [head_yaw, head_pitch], 0.2)
-
-                            if abs(dx) > 30:
-                                angle = -dx * 0.002
-                                angle = max(-0.5, min(0.5, angle))
-                                try:
-                                    motion.moveTo(0, 0, float(angle))
-                                except RuntimeError as e:
-                                    print("Bewegung fehlgeschlagen:", e)
-
-                            break
-
-            # Bild anzeigen
-            annotated_frame = frame if results is None else results[0].plot()
-            cv2.imshow("NAO + YOLO", annotated_frame)
-
-            frame_count += 1
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
+    except KeyboardInterrupt:
+        print("Beendet durch Benutzer.")
     finally:
-        try:
-            video_service.unsubscribe(name_id)
-        except Exception as e:
-            print("Fehler beim Unsubscribe:", e)
-
+        motion.stopMove()
         cv2.destroyAllWindows()
-        tts.say("Tracker beendet")
-
-
-if __name__ == "__main__":
-    main()
+        video_service.unsubscribe(cam_name)
+        motion.rest()
