@@ -9,7 +9,7 @@ import os
 
 env.load_dotenv()
 IP_ADDRESS = os.getenv("IP_ADDRESS")
-ROBOT_PORT = 9559  # Standardport
+ROBOT_PORT = os.getenv("ROBOT_PORT") 
 
 def main():
     # 1. Session aufbauen
