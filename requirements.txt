@@ -1,3 +1,5 @@
 numpy
 python_dotenv
 qi
+ultralytics
+cv2
