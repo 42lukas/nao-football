@@ -16,15 +16,18 @@ def ball_tracker(session):
     tts.say("Start.")
 
     # Kamera abonnieren
-    resolution = 1  # VGA
+    resolution = 1  # QVGA
     color_space = 11  # RGB
     fps = 15
     cam_name = "BallTracker"
     cam = video_service.subscribeCamera("camClient", 1, resolution, color_space, fps)
 
-    # YOLOv5-Modell laden
-    model_path = "./yolo_model/best.pt"
-    model = YOLO(model_path)
+    # YOLO-Modell laden
+    model = YOLO("./yolo_model/best.pt")
+
+    # Ball-Cache
+    last_seen = None
+    lost_timeout = 1.5  # Sekunden
 
     try:
         while True:
@@ -34,44 +37,68 @@ def ball_tracker(session):
                 print("Kein Bild empfangen, warte kurz...")
                 time.sleep(0.1)
                 continue
-            
-            print("Bild empfangen")
 
-            width = image_data[0]
-            height = image_data[1]
-            array = image_data[6]
-            image = np.frombuffer(array, dtype=np.uint8).reshape((height, width, 3))
+            width, height = image_data[0], image_data[1]
+            image = np.frombuffer(image_data[6], dtype=np.uint8).reshape((height, width, 3))
 
-            # YOLO-Inferenz
-            results = model(image)
+            # Bild anzeigen
             cv2.imshow("NAO Kamera", image)
             cv2.waitKey(1)
-            result = results[0]  # Nur ein Bild
-            boxes = result.boxes  # Boxes-Objekt
+
+            # YOLO
+            results = model(image)
+            result = results[0]
+            boxes = result.boxes
+
+            current_time = time.time()
+            ball_found = False
 
             if boxes is not None and len(boxes) > 0:
-                # Nur den ersten Ball nehmen
                 box = boxes[0]
                 xyxy = box.xyxy[0].cpu().numpy()
                 x1, y1, x2, y2 = xyxy
                 center_x = int((x1 + x2) / 2)
                 center_y = int((y1 + y2) / 2)
 
-                # Bildmitte und Steuerung
-                img_center_x = image.shape[1] // 2
-                diff_x = center_x - img_center_x
+                # Caching
+                last_seen = {
+                    "center_x": center_x,
+                    "center_y": center_y,
+                    "timestamp": current_time
+                }
+                ball_found = True
 
-                if abs(diff_x) < 30:
-                    motion.move(0.1, 0, 0)  # Geradeaus
-                elif diff_x < 0:
-                    motion.move(0, 0, 0.2)  # Links drehen
-                else:
-                    motion.move(0, 0, -0.2)  # Rechts drehen
-
+            if ball_found:
                 print(f"Ball gefunden bei x={center_x}, y={center_y}")
+                diff_x = center_x - (width // 2)
+
+            elif last_seen and (current_time - last_seen["timestamp"] < lost_timeout):
+                # Verwende letzten bekannten Punkt
+                diff_x = last_seen["center_x"] - (width // 2)
+                print("Verwende gecachte Ballposition.")
+
             else:
-                motion.move(0, 0, 0.3)
+                if last_seen:
+                    if last_seen["center_x"] < (width // 2):
+                        direction = "left"
+                        motion.move(0, 0, 0.3)
+                    else:
+                        direction = "right"
+                        motion.move(0, 0, -0.3)
+                    print(f"Ball verloren – Suche durch Drehen nach {direction}.")
+                else:
+                    motion.move(0, 0, 0.3)  # Fallback: links drehen
+                    print("Ball nie gesehen – Standard-Drehung.")
                 time.sleep(0.1)
+                continue
+
+            # Bewegung je nach Richtung
+            if abs(diff_x) < 30:
+                motion.move(0.1, 0, 0)
+            elif diff_x < 0:
+                motion.move(0, 0, 0.2)
+            else:
+                motion.move(0, 0, -0.2)
 
             time.sleep(0.1)
 
