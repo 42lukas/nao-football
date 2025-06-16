@@ -8,33 +8,30 @@ def ball_tracker(session):
     motion = session.service("ALMotion")
     posture = session.service("ALRobotPosture")
     video_service = session.service("ALVideoDevice")
-    tts = session.service("ALTextToSpeech")
 
-    # Initialisierung
     motion.wakeUp()
     posture.goToPosture("StandInit", 0.5)
-    tts.say("Start.")
 
-    # Kamera abonnieren
-    resolution = 1  # QVGA
-    color_space = 11  # RGB
+    # cam settings
+    # 0=Top-Cam, 1=Bottom-Cam; Resolution=1: QVGA (320x240); Color=11: RGB
+    resolution = 1
+    color_space = 11
     fps = 15
-    cam_name = "BallTracker"
-    cam = video_service.subscribeCamera("camClient", 1, resolution, color_space, fps)
+    cam_name = "cam"
+    cam = video_service.subscribeCamera(cam_name, 1, resolution, color_space, fps)
 
-    # YOLO-Modell laden
     model = YOLO("./yolo_model/best.pt")
 
-    # Ball-Cache
+    # ball cache
     last_seen = None
-    lost_timeout = 1.5  # Sekunden
+    lost_timeout = 1.5
+
 
     try:
         while True:
-            # Bild holen
             image_data = video_service.getImageRemote(cam)
             if image_data is None:
-                print("Kein Bild empfangen, warte kurz...")
+                print("Kein Bild empfangen, warte ggf. kurz...")
                 time.sleep(0.1)
                 continue
 
@@ -60,7 +57,7 @@ def ball_tracker(session):
                 center_x = int((x1 + x2) / 2)
                 center_y = int((y1 + y2) / 2)
 
-                # Caching
+                # caching
                 last_seen = {
                     "center_x": center_x,
                     "center_y": center_y,
@@ -73,7 +70,6 @@ def ball_tracker(session):
                 diff_x = center_x - (width // 2)
 
             elif last_seen and (current_time - last_seen["timestamp"] < lost_timeout):
-                # Verwende letzten bekannten Punkt
                 diff_x = last_seen["center_x"] - (width // 2)
                 print("Verwende gecachte Ballposition.")
 
@@ -87,18 +83,24 @@ def ball_tracker(session):
                         motion.move(0, 0, -0.3)
                     print(f"Ball verloren – Suche durch Drehen nach {direction}.")
                 else:
-                    motion.move(0, 0, 0.3)  # Fallback: links drehen
+                    motion.move(0, 0, 0.3)
                     print("Ball nie gesehen – Standard-Drehung.")
                 time.sleep(0.1)
                 continue
 
-            # Bewegung je nach Richtung
-            if abs(diff_x) < 30:
-                motion.move(0.1, 0, 0)
-            elif diff_x < 0:
-                motion.move(0, 0, 0.2)
+            align_threshold = int(width * 0.30)  # 30%
+
+            if abs(diff_x) > align_threshold:
+                if diff_x < 0:
+                    motion.move(0, 0, 0.2)
+                    print("Drehe nach links")
+                else:
+                    motion.move(0, 0, -0.2)
+                    print("Drehe nach rechts")
             else:
-                motion.move(0, 0, -0.2)
+                motion.move(0.1, 0, 0)
+                print("Geradeaus")
+
 
             time.sleep(0.1)
 
