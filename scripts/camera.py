@@ -31,7 +31,7 @@ def main():
     client_name = cam.subscribeCamera("camClient", 0, resolution, color_space, fps)
 
     # YOLO-Modell laden
-    model = YOLO("/home/mihoshi/repos/nao-football/Yolo-Model/best.pt")
+    model = YOLO("/Yolo-Model/best.pt")
 
     try:
         print("Starte Kamera-Stream mit Ballerkennung. Drücke ESC zum Beenden.")
