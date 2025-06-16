@@ -6,6 +6,7 @@ import dotenv as env
 import numpy as np
 import time
 import os
+from ultralytics import YOLO
 
 env.load_dotenv()
 IP_ADDRESS = os.getenv("IP_ADDRESS")
@@ -29,8 +30,11 @@ def main():
     fps = 30
     client_name = cam.subscribeCamera("camClient", 0, resolution, color_space, fps)
 
+    # YOLO-Modell laden
+    model = YOLO("/home/mihoshi/repos/nao-football/Yolo-Model/best.pt")
+
     try:
-        print("Starte Kamera-Stream. Drücke ESC zum Beenden.")
+        print("Starte Kamera-Stream mit Ballerkennung. Drücke ESC zum Beenden.")
         while True:
             frame = cam.getImageRemote(client_name)
             if frame is None:
@@ -42,7 +46,11 @@ def main():
             array = frame[6]
             img = np.frombuffer(array, dtype=np.uint8).reshape((height, width, 3))
 
-            cv2.imshow("NAO-Kamera", img)
+            # YOLO-Inferenz
+            results = model(img)
+            annotated_img = results[0].plot()  # Zeichnet Boxen ins Bild
+
+            cv2.imshow("NAO-Kamera mit Ballerkennung", annotated_img)
             key = cv2.waitKey(1) & 0xFF
             if key == 27:  # ESC
                 break

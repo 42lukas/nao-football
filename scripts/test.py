@@ -1,31 +1,33 @@
+#!/usr/bin/env python3
 import qi
-import socket
-import struct
+import sys
+import cv2
+import dotenv as env
+import numpy as np
 import time
 import os
-import dotenv as env
 
 env.load_dotenv()
 IP_ADDRESS = os.getenv("IP_ADDRESS")
-DEIN_PC_IP = os.getenv("DEIN_PC_IP")
+ROBOT_PORT = os.getenv("ROBOT_PORT") 
 
 def main():
+    # 1. Session aufbauen
     session = qi.Session()
-    session.connect(f"tcp://{IP_ADDRESS}")  # oder interne IP
+    try:
+        session.connect(f"tcp://{IP_ADDRESS}:{ROBOT_PORT}")
+    except RuntimeError:
+        print(f"Cannot connect to NAO at {IP_ADDRESS}:{ROBOT_PORT}")
+        sys.exit(1)
 
-    video = session.service("ALVideoDevice")
-    name = video.subscribeCamera("pic", 0, 1, 11, 5)  # 320x240 RGB, 5 FPS
-
-    s = socket.socket()
-    s.connect((DEIN_PC_IP, 5000))  # ← IP deines Rechners angeben
-
-    while True:
-        img = video.getImageRemote(name)
-        if img:
-            data = img[6]
-            size = len(data)
-            s.sendall(struct.pack("!I", size) + data)
-        time.sleep(0.2)
+    # 2. Posture-Service holen
+    posture = session.service("ALRobotPosture")
+    # Aufstehen
+    posture.goToPosture("StandInit", 0.5)
+    time.sleep(2)
+    # Hinsetzen
+    posture.goToPosture("Sit", 0.5)
+    posture.goToPosture("StandInit", 0.5)
 
 if __name__ == "__main__":
     main()
