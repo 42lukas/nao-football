@@ -10,15 +10,16 @@ def ball_tracker(session):
     video_service = session.service("ALVideoDevice")
 
     motion.wakeUp()
+    motion.setAngles("HeadPitch", 0.0, 0.2)
     posture.goToPosture("StandInit", 0.5)
 
     # cam settings
-    # 0=Top-Cam, 1=Bottom-Cam; Resolution=1: QVGA (320x240); Color=11: RGB
+    # Resolution=1: QVGA (320x240); Color=11: RGB
     resolution = 1
     color_space = 11
     fps = 15
-    cam_name = "cam"
-    cam = video_service.subscribeCamera(cam_name, 1, resolution, color_space, fps)
+    cam_name = "nao_camera"
+    cam = video_service.subscribeCamera(cam_name, 1, resolution, color_space, fps) # 0=Top-Cam, 1=Bottom-Cam;
 
     model = YOLO("./yolo_model/best.pt")
 
@@ -72,6 +73,15 @@ def ball_tracker(session):
             elif last_seen and (current_time - last_seen["timestamp"] < lost_timeout):
                 diff_x = last_seen["center_x"] - (width // 2)
                 print("Verwende gecachte Ballposition.")
+                
+            if ball_found or (last_seen and (current_time - last_seen["timestamp"] < lost_timeout)):
+                check_y = center_y if ball_found else last_seen["center_y"]
+                if check_y > height * 0.8:
+                    motion.setAngles("HeadPitch", 0.35, 0.2)
+                    print("Ball sehr nah – Kopf wird gesenkt")
+                else:
+                    motion.setAngles("HeadPitch", 0.0, 0.2)
+                    print("Ball weiter weg – Kopf auf Standardposition")
 
             else:
                 if last_seen:

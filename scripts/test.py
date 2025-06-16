@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import qi
-import argparse
 import sys
 import cv2
 from dotenv import load_dotenv
 import os
 import numpy as np
 import time
+from wake_up import wake_up
 
 load_dotenv()
 IP_ADDRESS = os.getenv("IP_ADDRESS")
@@ -15,19 +15,24 @@ def main(robot_ip, robot_port):
     # 1. Session aufbauen
     session = qi.Session()
     try:
-        session.connect("169.254.121.199:9559")
+        session.connect("192.168.200.52:9559")
     except RuntimeError:
         print(f"Cannot connect to NAO at {robot_ip}:{robot_port}")
         sys.exit(1)
 
+    wake_up(session)
     # 2. Video-Service holen
     cam = session.service("ALVideoDevice")
+    motion = session.service("ALMotion")
+
+    motion.setAngles("HeadPitch", 0.35, 0.2)
 
     # 3. Kamera abonnieren (0=Top-Cam, 1=Bottom-Cam; Resolution=2: 640x480; Color=11: BGR)
     resolution = 1      # kQVGA (320x240)=1, VGA (640x480)=2, HD (1280x960)=3
     color_space = 11    # kBGRColorSpace
     fps = 30
-    client_name = cam.subscribeCamera("camClient", 0, resolution, color_space, fps)
+    camera_name = "camera"
+    client_name = cam.subscribeCamera(camera_name, 1, resolution, color_space, fps)
 
     try:
         print("Starte Kamera-Stream. Drücke ESC zum Beenden.")
@@ -56,7 +61,7 @@ def main(robot_ip, robot_port):
 
     finally:
         # 7. Aufräumen
-        cam.unsubscribe(client_name)
+        cam.unsubscribe(camera_name)
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
