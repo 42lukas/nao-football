@@ -2,6 +2,7 @@ import numpy as np
 import time
 import cv2
 from ultralytics import YOLO
+from kick import kick
 
 def ball_tracker(session):
     # NAO-Services
@@ -20,29 +21,28 @@ def ball_tracker(session):
     cam_name = "cam"
     cam = video_service.subscribeCamera(cam_name, 1, resolution, color_space, fps)
 
+    # YOLO-Modell
     model = YOLO("./yolo_model/best.pt")
 
-    # ball cache
+    # Ball Cache
     last_seen = None
     lost_timeout = 1.5
-
 
     try:
         while True:
             image_data = video_service.getImageRemote(cam)
             if image_data is None:
-                print("Kein Bild empfangen, warte ggf. kurz...")
+                print("Kein Bild empfangen...")
                 time.sleep(0.1)
                 continue
 
             width, height = image_data[0], image_data[1]
             image = np.frombuffer(image_data[6], dtype=np.uint8).reshape((height, width, 3))
 
-            # Bild anzeigen
+            # Kameraanzeige
             cv2.imshow("NAO Kamera", image)
             cv2.waitKey(1)
 
-            # YOLO
             results = model(image)
             result = results[0]
             boxes = result.boxes
@@ -57,7 +57,6 @@ def ball_tracker(session):
                 center_x = int((x1 + x2) / 2)
                 center_y = int((y1 + y2) / 2)
 
-                # caching
                 last_seen = {
                     "center_x": center_x,
                     "center_y": center_y,
@@ -75,20 +74,34 @@ def ball_tracker(session):
 
             else:
                 if last_seen:
-                    if last_seen["center_x"] < (width // 2):
-                        direction = "left"
-                        motion.move(0, 0, 0.3)
-                    else:
-                        direction = "right"
-                        motion.move(0, 0, -0.3)
-                    print(f"Ball verloren – Suche durch Drehen nach {direction}.")
+                    direction = "left" if last_seen["center_x"] < (width // 2) else "right"
+                    motion.move(0, 0, 0.3 if direction == "left" else -0.3)
+                    print(f"Ball verloren – Drehe nach {direction}")
                 else:
                     motion.move(0, 0, 0.3)
-                    print("Ball nie gesehen – Standard-Drehung.")
+                    print("Ball nie gesehen – Drehe links")
                 time.sleep(0.1)
                 continue
 
-            align_threshold = int(width * 0.30)  # 30%
+            # Dynamische Kopfneigung
+            if ball_found or (last_seen and (current_time - last_seen["timestamp"] < lost_timeout)):
+                check_y = center_y if ball_found else last_seen["center_y"]
+
+                if check_y > height * 0.95:
+                    motion.stopMove()
+                    print("Ball sehr nah – Kick ausführen")
+                    kick(session, "right")
+                    break
+
+                #elif check_y > height * 0.8:
+                 #   motion.setAngles("HeadPitch", 0.35, 0.2)
+                  #  print("Ball nah – Kopf nach unten")
+                #else:
+                 #   motion.setAngles("HeadPitch", 0.0, 0.2)
+                  #  print("Ball weiter weg – Kopf normal")
+
+            # Steuerung
+            align_threshold = int(width * 0.3)
 
             if abs(diff_x) > align_threshold:
                 if diff_x < 0:
@@ -99,13 +112,12 @@ def ball_tracker(session):
                     print("Drehe nach rechts")
             else:
                 motion.move(0.1, 0, 0)
-                print("Geradeaus")
-
+                print("Laufe geradeaus")
 
             time.sleep(0.1)
 
     except KeyboardInterrupt:
-        print("Beendet durch Benutzer.")
+        print("Manuell beendet.")
     finally:
         motion.stopMove()
         cv2.destroyAllWindows()
