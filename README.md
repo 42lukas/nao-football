@@ -3,8 +3,7 @@
 This project aims to program a humanoid **NAO robot** that can play soccer.  
 The control logic is combined with a **self-trained YOLO object detection model** to detect the ball.  
 
-This Repository is a Robot-Soccer-Project written in C#. It's part of a university project (HWR Berlin).
-
+This repository contains a robot soccer project implemented in Python. It was developed as part of a university course at HWR Berlin.
 ---
 
 ## Requirements ✅
